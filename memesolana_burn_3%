@@ -1,0 +1,58 @@
+anchor init memecoin_with_burn
+cd memecoin_with_burn
+
+
+use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Mint, TokenAccount, Token, Transfer, Burn};
+
+declare_id!("YourProgramID");
+
+#[program]
+pub mod memecoin_with_burn {
+    use super::*;
+
+    // Function to transfer tokens and burn 3%
+    pub fn transfer_with_burn(ctx: Context<TransferWithBurn>, amount: u64) -> Result<()> {
+        // Calculate the 3% burn amount
+        let burn_amount = (amount as u128 * 3) / 100; // 3% of the transferred amount
+        let transfer_amount = amount - burn_amount as u64; // Remaining amount after burn
+
+        // Burn the 3%
+        let burn_ctx = CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            Burn {
+                mint: ctx.accounts.mint.to_account_info(),
+                from: ctx.accounts.from.to_account_info(),
+                authority: ctx.accounts.authority.to_account_info(),
+            },
+        );
+        token::burn(burn_ctx, burn_amount as u64)?;
+
+        // Transfer the remaining amount to the recipient
+        let transfer_ctx = CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.from.to_account_info(),
+                to: ctx.accounts.to.to_account_info(),
+                authority: ctx.accounts.authority.to_account_info(),
+            },
+        );
+        token::transfer(transfer_ctx, transfer_amount)?;
+
+        Ok(())
+    }
+}
+
+// Context for the transfer and burn operation
+#[derive(Accounts)]
+pub struct TransferWithBurn<'info> {
+    #[account(mut)]
+    pub from: Account<'info, TokenAccount>,  // Sender's token account
+    #[account(mut)]
+    pub to: Account<'info, TokenAccount>,    // Recipient's token account
+    #[account(mut)]
+    pub mint: Account<'info, Mint>,          // The mint (token) being used
+    #[account(signer)]
+    pub authority: AccountInfo<'info>,       // Authority of the sender
+    pub token_program: Program<'info, Token>, // SPL token program
+}
